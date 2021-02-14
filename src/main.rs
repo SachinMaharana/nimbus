@@ -47,6 +47,12 @@ enum Command {
     /// List the dns records for a zone
     #[structopt(name = "list")]
     List,
+    /// Create a dns records for a zone
+    #[structopt(name = "create")]
+    Create,
+    /// Delete a dns records for a zone
+    #[structopt(name = "delete")]
+    Delete,
 }
 
 fn handle_list(api_client: &HttpApiClient, zone_identifier: String) -> Result<()> {
@@ -59,7 +65,106 @@ fn handle_list(api_client: &HttpApiClient, zone_identifier: String) -> Result<()
     })?;
 
     let dns_records = dns_list_response.result;
-    println!("{:?}", dns_records);
+
+    let mut dns_with_iden: HashMap<String, String> = HashMap::new();
+
+    for item in dns_records.iter() {
+        dns_with_iden.insert(item.name.clone(), item.id.clone());
+    }
+
+    let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
+
+    println!("{:?}", dns_names);
+    Ok(())
+}
+
+fn handle_create(
+    api_client: &HttpApiClient,
+    zone_identifier: String,
+    selected_zone: String,
+) -> Result<()> {
+    let words: Vec<&str> = vec!["core", "star", "gear", "pour", "rich", "food", "bond"];
+
+    let word = words.choose(&mut rand::thread_rng()).unwrap().to_owned();
+
+    let record: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Record Name")
+        .default(word.to_string())
+        .interact_text()?;
+
+    let record = format!("{}{}{}", record, ".", selected_zone);
+
+    let ip: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("IP Addr")
+        .interact_text()?;
+
+    let ipv4 = Ipv4Addr::from_str(ip.as_str())?;
+
+    let _response = api_client.request(&dns::CreateDnsRecord {
+        zone_identifier: zone_identifier.as_str(),
+        params: dns::CreateDnsRecordParams {
+            ttl: None,
+            name: record.as_str(),
+            proxied: Some(true),
+            priority: None,
+            content: DnsContent::A { content: ipv4 },
+        },
+    });
+    Ok(())
+}
+
+fn handle_delete(api_client: &HttpApiClient, zone_identifier: String) -> Result<()> {
+    let dns_list_response = api_client.request(&dns::ListDnsRecords {
+        zone_identifier: zone_identifier.as_str(),
+        params: dns::ListDnsRecordsParams {
+            direction: Some(OrderDirection::Ascending),
+            ..Default::default()
+        },
+    })?;
+
+    let dns_records = dns_list_response.result;
+
+    let mut dns_with_iden: HashMap<String, String> = HashMap::new();
+
+    for item in dns_records.iter() {
+        dns_with_iden.insert(item.name.clone(), item.id.clone());
+    }
+
+    let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
+    let defaults = vec![false; dns_names.len()];
+    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Pick your food")
+        .items(&dns_names[..])
+        .defaults(&defaults[..])
+        .interact()
+        .unwrap();
+
+    if selections.is_empty() {
+        println!("You did not select anything :(");
+    } else {
+        println!("You selected these things:");
+        for selection in selections {
+            if Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt(format!(
+                    "Do you want to delete {} record?",
+                    dns_names.get(selection).unwrap()
+                ))
+                .interact()
+                .unwrap()
+            {
+                let response = api_client.request(&dns::DeleteDnsRecord {
+                    zone_identifier: zone_identifier.as_str(),
+                    identifier: dns_with_iden.get(&dns_names[selection]).unwrap(),
+                });
+                print_response(response);
+            } else {
+                println!(
+                    "nevermind then. Not deleting {}",
+                    dns_names.get(selection).unwrap()
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -79,6 +184,25 @@ fn main() -> Result<()> {
         HttpApiClientConfig::default(),
         Environment::Production,
     )?;
+
+    let mut account: Vec<String> = Vec::new();
+
+    let response = api_client.request(&account::ListAccounts { params: None });
+
+    print_response_json(&response);
+
+    for i in response.unwrap().result.iter() {
+        account.push(i.name.clone());
+    }
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Pick your account")
+        .default(0)
+        .items(&account[..])
+        .interact()
+        .unwrap();
+
+    println!("Enjoy your {}!", account[selection]);
 
     let response = api_client.request(&zone::ListZones {
         params: ListZonesParams {
@@ -105,187 +229,20 @@ fn main() -> Result<()> {
 
     let zone_identifier = zone_with_iden.get(&items[selection]).unwrap();
 
+    let selected_zone = &items[selection];
+
     match args.cmd {
         Command::List => return handle_list(&api_client, zone_identifier.to_owned()),
+        Command::Create => {
+            return handle_create(
+                &api_client,
+                zone_identifier.to_owned(),
+                selected_zone.to_owned(),
+            )
+        }
+        Command::Delete => return handle_delete(&api_client, zone_identifier.to_owned()),
     }
-
-    // let mut account: Vec<String> = Vec::new();
-
-    // let response = api_client.request(&account::ListAccounts { params: None });
-
-    // print_response_json(&response);
-
-    // for i in response.unwrap().result.iter() {
-    //     account.push(i.name.clone());
-    // }
-
-    // let selection = Select::with_theme(&ColorfulTheme::default())
-    //     .with_prompt("Pick your account")
-    //     .default(0)
-    //     .items(&account[..])
-    //     .interact()
-    //     .unwrap();
-
-    // println!("Enjoy your {}!", account[selection]);
-
-    // let r = &response.unwrap();
-
-    // print_response_json(response);
-
-    // let response = api_client.request(&user::GetUserDetails {});
-    // print_response_json(response);
-
-    // let response = api_client.request(&user::GetUserTokenStatus {});
-    // print_response_json(response);
-
-    // let response = api_client
-    //     .request(&zone::ListZones {
-    //         params: ListZonesParams {
-    //             status: Some(Status::Active),
-    //             search_match: Some(SearchMatch::All),
-    //             ..Default::default()
-    //         },
-    //     })
-    //     .unwrap();
-
-    // let mut zone_with_iden: HashMap<String, String> = HashMap::new();
-
-    // let zone = response.result;
-
-    // for item in zone.iter() {
-    //     zone_with_iden.insert(item.name.clone(), item.id.clone());
-    // }
-
-    // let items = zone_with_iden.keys().cloned().collect::<Vec<String>>();
-
-    // let selection = Select::with_theme(&ColorfulTheme::default())
-    //     .with_prompt("Pick your zone: ")
-    //     .default(0)
-    //     .items(&items)
-    //     .interact()
-    //     .unwrap();
-
-    // let zone_identifier = zone_with_iden.get(&items[selection]).unwrap();
-    // let words: Vec<&str> = vec!["core", "star", "gear", "pour", "rich", "food", "bond"];
-
-    // let word = words.choose(&mut rand::thread_rng()).unwrap().to_owned();
-
-    // let record: String = Input::with_theme(&ColorfulTheme::default())
-    //     .with_prompt("Record Name")
-    //     .default(word.to_string())
-    //     .interact_text()
-    //     .unwrap();
-
-    // let record = format!("{}{}", record, ".sachinmaharana.com".to_string());
-
-    // let ip: String = Input::with_theme(&ColorfulTheme::default())
-    //     .with_prompt("IP Addr")
-    //     .interact_text()
-    //     .unwrap();
-    // let ipv4 = Ipv4Addr::from_str(ip.as_str()).unwrap();
-
-    // let _response = api_client.request(&dns::CreateDnsRecord {
-    //     zone_identifier: zone_identifier.as_str(),
-    //     params: dns::CreateDnsRecordParams {
-    //         ttl: None,
-    //         name: record.as_str(),
-    //         proxied: Some(true),
-    //         priority: None,
-    //         content: DnsContent::A { content: ipv4 },
-    //     },
-    // });
-
-    // print_response(rr);
-
-    // let response = api_client.request(&zone::ZoneDetails {
-    //     identifier: "013629251ecc87b23edc9532e02ef4ba",
-    // });
-    // print_response(response);
-
-    // let dns_list_response = api_client
-    //     .request(&dns::ListDnsRecords {
-    //         zone_identifier: zone_identifier.as_str(),
-    //         params: dns::ListDnsRecordsParams {
-    //             direction: Some(OrderDirection::Ascending),
-    //             ..Default::default()
-    //         },
-    //     })
-    //     .unwrap();
-
-    // let dns_records = dns_list_response.result;
-
-    // let mut dns_with_iden: HashMap<String, String> = HashMap::new();
-
-    // for item in dns_records.iter() {
-    //     dns_with_iden.insert(item.name.clone(), item.id.clone());
-    // }
-
-    // let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
-
-    // let defaults = vec![false; dns_names.len()];
-    // let selections = MultiSelect::with_theme(&ColorfulTheme::default())
-    //     .with_prompt("Pick your food")
-    //     .items(&dns_names[..])
-    //     .defaults(&defaults[..])
-    //     .interact()
-    //     .unwrap();
-
-    // println!("{:?}", selections);
-    // println!("{:?}", dns_names);
-
-    // if selections.is_empty() {
-    //     println!("You did not select anything :(");
-    // } else {
-    //     println!("You selected these things:");
-    //     for selection in selections {
-    //         if Confirm::with_theme(&ColorfulTheme::default())
-    //             .with_prompt(format!(
-    //                 "Do you want to delete {} record?",
-    //                 dns_names.get(selection).unwrap()
-    //             ))
-    //             .interact()
-    //             .unwrap()
-    //         {
-    //             let response = api_client.request(&dns::DeleteDnsRecord {
-    //                 zone_identifier: zone_identifier.as_str(),
-    //                 identifier: dns_with_iden.get(&dns_names[selection]).unwrap(),
-    //             });
-    //             print_response(response);
-    //         } else {
-    //             println!(
-    //                 "nevermind then. Not deleting {}",
-    //                 dns_names.get(selection).unwrap()
-    //             );
-    //         }
-    //     }
-    // }
-
-    // print_response(response);
-
-    // let response = api_client.request(&dns::CreateDnsRecord {
-    //     zone_identifier: "013629251ecc87b23edc9532e02ef4ba",
-    //     params: dns::CreateDnsRecordParams {
-    //         ttl: None,
-    //         name: "ch.sachinmaharana.com",
-    //         proxied: Some(true),
-    //         priority: None,
-    //         content: DnsContent::A {
-    //             content: Ipv4Addr::new(144, 202, 47, 216),
-    //         },
-    //     },
-    // });
-    // print_response(response);
-
-    // let response = api_client.request(&dns::DeleteDnsRecord {
-    //     zone_identifier: zone_identifier.as_str(),
-    //     identifier: "31102281e86b68cef38728308a5a1113",
-    // });
-    // print_response(response);
-
-    Ok(())
 }
-
-// fn verify_token(token: String) {}
 
 fn print_response_json<T: ApiResult>(response: &ApiResponse<T>)
 where
@@ -336,3 +293,9 @@ fn print_response<T: ApiResult>(response: ApiResponse<T>) {
         },
     }
 }
+
+// let response = api_client.request(&user::GetUserDetails {});
+// print_response_json(response);
+
+// let response = api_client.request(&user::GetUserTokenStatus {});
+// print_response_json(response);
