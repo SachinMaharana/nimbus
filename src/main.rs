@@ -59,6 +59,7 @@ fn handle_list(api_client: &HttpApiClient, zone_identifier: String) -> Result<()
     })?;
 
     let dns_records = dns_list_response.result;
+    println!("{:?}", dns_records);
     Ok(())
 }
 
@@ -79,16 +80,13 @@ fn main() -> Result<()> {
         Environment::Production,
     )?;
 
-    let response = api_client
-        .request(&zone::ListZones {
-            params: ListZonesParams {
-                status: Some(Status::Active),
-                search_match: Some(SearchMatch::All),
-                ..Default::default()
-            },
-        })
-        .unwrap();
-
+    let response = api_client.request(&zone::ListZones {
+        params: ListZonesParams {
+            status: Some(Status::Active),
+            search_match: Some(SearchMatch::All),
+            ..Default::default()
+        },
+    })?;
     let mut zone_with_iden: HashMap<String, String> = HashMap::new();
 
     let zone = response.result;
@@ -140,34 +138,34 @@ fn main() -> Result<()> {
     // let response = api_client.request(&user::GetUserTokenStatus {});
     // print_response_json(response);
 
-    let response = api_client
-        .request(&zone::ListZones {
-            params: ListZonesParams {
-                status: Some(Status::Active),
-                search_match: Some(SearchMatch::All),
-                ..Default::default()
-            },
-        })
-        .unwrap();
+    // let response = api_client
+    //     .request(&zone::ListZones {
+    //         params: ListZonesParams {
+    //             status: Some(Status::Active),
+    //             search_match: Some(SearchMatch::All),
+    //             ..Default::default()
+    //         },
+    //     })
+    //     .unwrap();
 
-    let mut zone_with_iden: HashMap<String, String> = HashMap::new();
+    // let mut zone_with_iden: HashMap<String, String> = HashMap::new();
 
-    let zone = response.result;
+    // let zone = response.result;
 
-    for item in zone.iter() {
-        zone_with_iden.insert(item.name.clone(), item.id.clone());
-    }
+    // for item in zone.iter() {
+    //     zone_with_iden.insert(item.name.clone(), item.id.clone());
+    // }
 
-    let items = zone_with_iden.keys().cloned().collect::<Vec<String>>();
+    // let items = zone_with_iden.keys().cloned().collect::<Vec<String>>();
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick your zone: ")
-        .default(0)
-        .items(&items)
-        .interact()
-        .unwrap();
+    // let selection = Select::with_theme(&ColorfulTheme::default())
+    //     .with_prompt("Pick your zone: ")
+    //     .default(0)
+    //     .items(&items)
+    //     .interact()
+    //     .unwrap();
 
-    let zone_identifier = zone_with_iden.get(&items[selection]).unwrap();
+    // let zone_identifier = zone_with_iden.get(&items[selection]).unwrap();
     // let words: Vec<&str> = vec!["core", "star", "gear", "pour", "rich", "food", "bond"];
 
     // let word = words.choose(&mut rand::thread_rng()).unwrap().to_owned();
@@ -204,63 +202,63 @@ fn main() -> Result<()> {
     // });
     // print_response(response);
 
-    let dns_list_response = api_client
-        .request(&dns::ListDnsRecords {
-            zone_identifier: zone_identifier.as_str(),
-            params: dns::ListDnsRecordsParams {
-                direction: Some(OrderDirection::Ascending),
-                ..Default::default()
-            },
-        })
-        .unwrap();
+    // let dns_list_response = api_client
+    //     .request(&dns::ListDnsRecords {
+    //         zone_identifier: zone_identifier.as_str(),
+    //         params: dns::ListDnsRecordsParams {
+    //             direction: Some(OrderDirection::Ascending),
+    //             ..Default::default()
+    //         },
+    //     })
+    //     .unwrap();
 
-    let dns_records = dns_list_response.result;
+    // let dns_records = dns_list_response.result;
 
-    let mut dns_with_iden: HashMap<String, String> = HashMap::new();
+    // let mut dns_with_iden: HashMap<String, String> = HashMap::new();
 
-    for item in dns_records.iter() {
-        dns_with_iden.insert(item.name.clone(), item.id.clone());
-    }
+    // for item in dns_records.iter() {
+    //     dns_with_iden.insert(item.name.clone(), item.id.clone());
+    // }
 
-    let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
+    // let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
 
-    let defaults = vec![false; dns_names.len()];
-    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick your food")
-        .items(&dns_names[..])
-        .defaults(&defaults[..])
-        .interact()
-        .unwrap();
+    // let defaults = vec![false; dns_names.len()];
+    // let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+    //     .with_prompt("Pick your food")
+    //     .items(&dns_names[..])
+    //     .defaults(&defaults[..])
+    //     .interact()
+    //     .unwrap();
 
-    println!("{:?}", selections);
-    println!("{:?}", dns_names);
+    // println!("{:?}", selections);
+    // println!("{:?}", dns_names);
 
-    if selections.is_empty() {
-        println!("You did not select anything :(");
-    } else {
-        println!("You selected these things:");
-        for selection in selections {
-            if Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt(format!(
-                    "Do you want to delete {} record?",
-                    dns_names.get(selection).unwrap()
-                ))
-                .interact()
-                .unwrap()
-            {
-                let response = api_client.request(&dns::DeleteDnsRecord {
-                    zone_identifier: zone_identifier.as_str(),
-                    identifier: dns_with_iden.get(&dns_names[selection]).unwrap(),
-                });
-                print_response(response);
-            } else {
-                println!(
-                    "nevermind then. Not deleting {}",
-                    dns_names.get(selection).unwrap()
-                );
-            }
-        }
-    }
+    // if selections.is_empty() {
+    //     println!("You did not select anything :(");
+    // } else {
+    //     println!("You selected these things:");
+    //     for selection in selections {
+    //         if Confirm::with_theme(&ColorfulTheme::default())
+    //             .with_prompt(format!(
+    //                 "Do you want to delete {} record?",
+    //                 dns_names.get(selection).unwrap()
+    //             ))
+    //             .interact()
+    //             .unwrap()
+    //         {
+    //             let response = api_client.request(&dns::DeleteDnsRecord {
+    //                 zone_identifier: zone_identifier.as_str(),
+    //                 identifier: dns_with_iden.get(&dns_names[selection]).unwrap(),
+    //             });
+    //             print_response(response);
+    //         } else {
+    //             println!(
+    //                 "nevermind then. Not deleting {}",
+    //                 dns_names.get(selection).unwrap()
+    //             );
+    //         }
+    //     }
+    // }
 
     // print_response(response);
 
@@ -285,11 +283,6 @@ fn main() -> Result<()> {
     // print_response(response);
 
     Ok(())
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Foo {
-    data: String,
 }
 
 // fn verify_token(token: String) {}
