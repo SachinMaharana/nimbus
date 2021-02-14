@@ -189,8 +189,6 @@ fn main() -> Result<()> {
 
     let response = api_client.request(&account::ListAccounts { params: None });
 
-    print_response_json(&response);
-
     for i in response.unwrap().result.iter() {
         account.push(i.name.clone());
     }
@@ -222,7 +220,7 @@ fn main() -> Result<()> {
     let items = zone_with_iden.keys().cloned().collect::<Vec<String>>();
 
     let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick your zone: ")
+        .with_prompt("Pick your zone")
         .default(0)
         .items(&items)
         .interact()?;
