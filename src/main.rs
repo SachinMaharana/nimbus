@@ -8,6 +8,7 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use serde_json::Value;
 use std::{any::type_name, collections::HashMap, env, iter::successors, str::FromStr};
+use structopt::StructOpt;
 use zone::{ListZonesParams, Status, ZoneDetails};
 
 use cloudflare::{
@@ -26,8 +27,46 @@ use std::net::Ipv4Addr;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, StructOpt)]
+struct Args {
+    #[structopt(
+        short = "c",
+        long = "cloudflare_token",
+        env,
+        hide_env_values = true,
+        required = true
+    )]
+    cloudflare_token: String,
+    #[structopt(subcommand)]
+    cmd: Command,
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "baadal", about = "interact with cloudflare")]
+enum Command {
+    /// List the dns records for a zone
+    #[structopt(name = "list")]
+    List,
+}
+
+fn handle_list(api_client: &HttpApiClient, zone_identifier: String) -> Result<()> {
+    let dns_list_response = api_client.request(&dns::ListDnsRecords {
+        zone_identifier: zone_identifier.as_str(),
+        params: dns::ListDnsRecordsParams {
+            direction: Some(OrderDirection::Ascending),
+            ..Default::default()
+        },
+    })?;
+
+    let dns_records = dns_list_response.result;
+    Ok(())
+}
+
 fn main() -> Result<()> {
-    let token = env::var("CLOUDFLARE_TOKEN").ok();
+    let args = Args::from_args();
+
+    let token: Option<String> = Some((&args.cloudflare_token).to_owned());
+
     let credentials = if let Some(token) = token {
         Credentials::UserAuthToken { token: token }
     } else {
@@ -39,6 +78,38 @@ fn main() -> Result<()> {
         HttpApiClientConfig::default(),
         Environment::Production,
     )?;
+
+    let response = api_client
+        .request(&zone::ListZones {
+            params: ListZonesParams {
+                status: Some(Status::Active),
+                search_match: Some(SearchMatch::All),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+    let mut zone_with_iden: HashMap<String, String> = HashMap::new();
+
+    let zone = response.result;
+
+    for item in zone.iter() {
+        zone_with_iden.insert(item.name.clone(), item.id.clone());
+    }
+
+    let items = zone_with_iden.keys().cloned().collect::<Vec<String>>();
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Pick your zone: ")
+        .default(0)
+        .items(&items)
+        .interact()?;
+
+    let zone_identifier = zone_with_iden.get(&items[selection]).unwrap();
+
+    match args.cmd {
+        Command::List => return handle_list(&api_client, zone_identifier.to_owned()),
+    }
 
     // let mut account: Vec<String> = Vec::new();
 
@@ -95,8 +166,6 @@ fn main() -> Result<()> {
         .items(&items)
         .interact()
         .unwrap();
-
-    println!("Enjoy your {}!", items[selection]);
 
     let zone_identifier = zone_with_iden.get(&items[selection]).unwrap();
     // let words: Vec<&str> = vec!["core", "star", "gear", "pour", "rich", "food", "bond"];
