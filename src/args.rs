@@ -16,7 +16,10 @@ pub struct Args {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "baadal", about = "interact with cloudflare")]
+#[structopt(
+    name = "nimbus",
+    about = "nimbus cli interacts with cloudflare for managing dns records"
+)]
 pub enum Command {
     #[structopt(name = "dns")]
     Dns(Dns),
