@@ -16,6 +16,7 @@ pub struct ZoneInfo {
     pub zone_name: String,
 }
 
+#[derive(Debug, Display)]
 pub struct DnsInfo {
     pub dns_names: Vec<String>,
     dns_identifier_hashmap: HashMap<String, String>,
@@ -138,9 +139,9 @@ pub fn handle_delete(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<
 pub fn handle_account_zone(api_client: &HttpApiClient) -> Result<ZoneInfo> {
     let mut account_list: Vec<String> = Vec::new();
 
-    let account_response = api_client.request(&account::ListAccounts { params: None });
+    let account_response = api_client.request(&account::ListAccounts { params: None })?;
 
-    for account in account_response?.result.iter() {
+    for account in account_response.result.iter() {
         account_list.push(account.name.clone());
     }
 
