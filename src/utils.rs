@@ -31,6 +31,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 pub fn print_response<T: ApiResult>(response: ApiResponse<T>) {
     match response {
         Ok(success) => println!("Success: {:#?}", success),
