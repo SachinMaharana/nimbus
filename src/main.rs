@@ -1,18 +1,12 @@
-#![allow(unused_imports)]
-#![allow(dead_code)]
-
 use anyhow::{bail, Result};
-use dns::{DnsContent, DnsRecord, ListDnsRecords, ListDnsRecordsParams};
-use env::VarError;
+use dns::DnsContent;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
-use serde_json::Value;
-use std::{any::type_name, collections::HashMap, env, iter::successors, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 use structopt::StructOpt;
-use zone::{ListZonesParams, Status, ZoneDetails};
+use zone::{ListZonesParams, Status};
 
 use cloudflare::{
-    endpoints::{account, dns, user, zone},
+    endpoints::{account, dns, zone},
     framework::{
         apiclient::ApiClient,
         auth::Credentials,
@@ -25,7 +19,7 @@ use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
 
 use std::net::Ipv4Addr;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 #[derive(Debug, StructOpt)]
 struct Args {
@@ -133,7 +127,7 @@ fn handle_delete(api_client: &HttpApiClient, zone_identifier: String) -> Result<
     let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
     let defaults = vec![false; dns_names.len()];
     let selections = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick your food")
+        .with_prompt("Pick records to delete")
         .items(&dns_names[..])
         .defaults(&defaults[..])
         .interact()
@@ -291,9 +285,3 @@ fn print_response<T: ApiResult>(response: ApiResponse<T>) {
         },
     }
 }
-
-// let response = api_client.request(&user::GetUserDetails {});
-// print_response_json(response);
-
-// let response = api_client.request(&user::GetUserTokenStatus {});
-// print_response_json(response);
