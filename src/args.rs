@@ -17,6 +17,18 @@ pub struct Args {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "baadal", about = "interact with cloudflare")]
 pub enum Command {
+    #[structopt(name = "dns")]
+    Dns(Dns),
+}
+
+#[derive(StructOpt, Debug)]
+pub struct Dns {
+    #[structopt(subcommand)]
+    pub cmd: DnsSubCommand,
+}
+
+#[derive(StructOpt, Debug)]
+pub enum DnsSubCommand {
     /// List the dns records for a zone
     #[structopt(name = "list")]
     List,

@@ -1,12 +1,11 @@
-#[macro_use] 
+#[macro_use]
 extern crate prettytable;
-use prettytable::{Table, Row, Cell};
 use anyhow::Result;
 use cloudflare::framework::{auth::Credentials, Environment, HttpApiClient, HttpApiClientConfig};
+use prettytable::Table;
 use structopt::StructOpt;
 
-
-use crate::args::{Args, Command};
+use crate::args::{Args, Command, DnsSubCommand};
 
 use crate::handlers::{
     handle_account_zone, handle_create, handle_delete, handle_list, DnsInfo, ZoneInfo,
@@ -36,24 +35,24 @@ impl Client {
 fn main() -> Result<()> {
     let args: Args = Args::from_args();
 
-    let token = args.cloudflare_token;
+    let token = args.cloudflare_token.clone();
     let api_client = Client::new(token)?.api_client;
 
     let zone_info: ZoneInfo = handle_account_zone(&api_client)?;
-
     match args.cmd {
-        Command::List => {
-            let DnsInfo { dns_names, .. } = handle_list(&api_client, zone_info)?;
-            let mut table = Table::new();
-            table.set_titles(row![FYc => "DNS Records"]);
-            for d in dns_names {
-               table.add_row(row![d]);
+        Command::Dns(dns) => match dns.cmd {
+            DnsSubCommand::List => {
+                let DnsInfo { dns_names, .. } = handle_list(&api_client, zone_info)?;
+                let mut table = Table::new();
+                table.set_titles(row![FYc => "DNS Records"]);
+                for d in dns_names {
+                    table.add_row(row![d]);
+                }
+                table.printstd();
+                Ok(())
             }
-            table.printstd();
-            // println!("{:?}", dns_names);
-            Ok(())
-        }
-        Command::Create => return handle_create(&api_client, zone_info),
-        Command::Delete => return handle_delete(&api_client, zone_info),
+            DnsSubCommand::Create => return handle_create(&api_client, zone_info),
+            DnsSubCommand::Delete => return handle_delete(&api_client, zone_info),
+        },
     }
 }
