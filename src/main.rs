@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use dns::DnsContent;
 use rand::seq::SliceRandom;
 use std::{collections::HashMap, str::FromStr};
@@ -8,48 +8,24 @@ use zone::{ListZonesParams, Status};
 use cloudflare::{
     endpoints::{account, dns, zone},
     framework::{
-        apiclient::ApiClient,
-        auth::Credentials,
-        response::{ApiFailure, ApiResponse, ApiResult},
-        Environment, HttpApiClient, HttpApiClientConfig, OrderDirection, SearchMatch,
+        apiclient::ApiClient, auth::Credentials, Environment, HttpApiClient, HttpApiClientConfig,
+        OrderDirection, SearchMatch,
     },
 };
+
+use crate::args::{Args, Command};
 
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
 
 use std::net::Ipv4Addr;
 
-use serde::Serialize;
+mod args;
+mod utils;
 
-#[derive(Debug, StructOpt)]
-struct Args {
-    #[structopt(
-        short = "c",
-        long = "cloudflare_token",
-        env,
-        hide_env_values = true,
-        required = true
-    )]
-    cloudflare_token: String,
-    #[structopt(subcommand)]
-    cmd: Command,
-}
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "baadal", about = "interact with cloudflare")]
-enum Command {
-    /// List the dns records for a zone
-    #[structopt(name = "list")]
-    List,
-    /// Create a dns records for a zone
-    #[structopt(name = "create")]
-    Create,
-    /// Delete a dns records for a zone
-    #[structopt(name = "delete")]
-    Delete,
-}
-
-fn handle_list(api_client: &HttpApiClient, zone_identifier: String) -> Result<()> {
+fn handle_list(
+    api_client: &HttpApiClient,
+    zone_identifier: String,
+) -> Result<(Vec<String>, HashMap<String, String>)> {
     let dns_list_response = api_client.request(&dns::ListDnsRecords {
         zone_identifier: zone_identifier.as_str(),
         params: dns::ListDnsRecordsParams {
@@ -68,8 +44,7 @@ fn handle_list(api_client: &HttpApiClient, zone_identifier: String) -> Result<()
 
     let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
 
-    println!("{:?}", dns_names);
-    Ok(())
+    Ok((dns_names, dns_with_iden))
 }
 
 fn handle_create(
@@ -79,7 +54,10 @@ fn handle_create(
 ) -> Result<()> {
     let words: Vec<&str> = vec!["core", "star", "gear", "pour", "rich", "food", "bond"];
 
-    let word = words.choose(&mut rand::thread_rng()).unwrap().to_owned();
+    let word = words
+        .choose(&mut rand::thread_rng())
+        .context("Error: rand")?
+        .to_owned();
 
     let record: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Record Name")
@@ -108,54 +86,36 @@ fn handle_create(
 }
 
 fn handle_delete(api_client: &HttpApiClient, zone_identifier: String) -> Result<()> {
-    let dns_list_response = api_client.request(&dns::ListDnsRecords {
-        zone_identifier: zone_identifier.as_str(),
-        params: dns::ListDnsRecordsParams {
-            direction: Some(OrderDirection::Ascending),
-            ..Default::default()
-        },
-    })?;
+    let (dns_names, dns_with_iden) = handle_list(&api_client, zone_identifier.to_owned())?;
 
-    let dns_records = dns_list_response.result;
-
-    let mut dns_with_iden: HashMap<String, String> = HashMap::new();
-
-    for item in dns_records.iter() {
-        dns_with_iden.insert(item.name.clone(), item.id.clone());
-    }
-
-    let dns_names = dns_with_iden.keys().cloned().collect::<Vec<String>>();
     let defaults = vec![false; dns_names.len()];
     let selections = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Pick records to delete")
         .items(&dns_names[..])
         .defaults(&defaults[..])
-        .interact()
-        .unwrap();
+        .interact()?;
 
     if selections.is_empty() {
         println!("You did not select anything :(");
     } else {
         println!("You selected these things:");
         for selection in selections {
+            let dns_name = dns_names
+                .get(selection)
+                .context("Error: dns_name not found")?;
             if Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt(format!(
-                    "Do you want to delete {} record?",
-                    dns_names.get(selection).unwrap()
-                ))
-                .interact()
-                .unwrap()
+                .with_prompt(format!("Do you want to delete {} record?", dns_name))
+                .interact()?
             {
                 let response = api_client.request(&dns::DeleteDnsRecord {
                     zone_identifier: zone_identifier.as_str(),
-                    identifier: dns_with_iden.get(&dns_names[selection]).unwrap(),
+                    identifier: dns_with_iden
+                        .get(&dns_names[selection])
+                        .context("Error: dns_with_iden hashmap")?,
                 });
-                print_response(response);
+                utils::print_response(response);
             } else {
-                println!(
-                    "nevermind then. Not deleting {}",
-                    dns_names.get(selection).unwrap()
-                );
+                println!("nevermind then. Not deleting {}", dns_name);
             }
         }
     }
@@ -163,7 +123,7 @@ fn handle_delete(api_client: &HttpApiClient, zone_identifier: String) -> Result<
 }
 
 fn main() -> Result<()> {
-    let args = Args::from_args();
+    let args: Args = Args::from_args();
 
     let token: Option<String> = Some((&args.cloudflare_token).to_owned());
 
@@ -183,7 +143,7 @@ fn main() -> Result<()> {
 
     let response = api_client.request(&account::ListAccounts { params: None });
 
-    for i in response.unwrap().result.iter() {
+    for i in response?.result.iter() {
         account.push(i.name.clone());
     }
 
@@ -191,8 +151,7 @@ fn main() -> Result<()> {
         .with_prompt("Pick your account")
         .default(0)
         .items(&account[..])
-        .interact()
-        .unwrap();
+        .interact()?;
 
     println!("Enjoy your {}!", account[selection]);
 
@@ -219,12 +178,18 @@ fn main() -> Result<()> {
         .items(&items)
         .interact()?;
 
-    let zone_identifier = zone_with_iden.get(&items[selection]).unwrap();
+    let zone_identifier = zone_with_iden
+        .get(&items[selection])
+        .context("Error: zone_with_iden")?;
 
     let selected_zone = &items[selection];
 
     match args.cmd {
-        Command::List => return handle_list(&api_client, zone_identifier.to_owned()),
+        Command::List => {
+            let (dns_names, _) = handle_list(&api_client, zone_identifier.to_owned())?;
+            println!("{:?}", dns_names);
+            Ok(())
+        }
         Command::Create => {
             return handle_create(
                 &api_client,
@@ -233,55 +198,5 @@ fn main() -> Result<()> {
             )
         }
         Command::Delete => return handle_delete(&api_client, zone_identifier.to_owned()),
-    }
-}
-
-fn print_response_json<T: ApiResult>(response: &ApiResponse<T>)
-where
-    T: Serialize,
-{
-    match response {
-        Ok(success) => {
-            let js = serde_json::to_string(&success.result).unwrap();
-            // let array: Vec<Foo> = serde_json::from_str(&success.result).unwrap();
-            // for i in js.iter() {}
-            println!("{}", js);
-        }
-        Err(e) => match e {
-            ApiFailure::Error(status, errors) => {
-                println!("HTTP {}", status);
-                for err in &errors.errors {
-                    println!("Error {}: {}", err.code, err.message);
-                    for (k, v) in &err.other {
-                        println!("{}: {}", k, v);
-                    }
-                }
-                for (k, v) in &errors.other {
-                    println!("{}: {}", k, v);
-                }
-            }
-            ApiFailure::Invalid(req_err) => println!("Error: {}", req_err),
-        },
-    }
-}
-
-fn print_response<T: ApiResult>(response: ApiResponse<T>) {
-    match response {
-        Ok(success) => println!("Success: {:#?}", success),
-        Err(e) => match e {
-            ApiFailure::Error(status, errors) => {
-                println!("HTTP {}:", status);
-                for err in errors.errors {
-                    println!("Error {}: {}", err.code, err.message);
-                    for (k, v) in err.other {
-                        println!("{}: {}", k, v);
-                    }
-                }
-                for (k, v) in errors.other {
-                    println!("{}: {}", k, v);
-                }
-            }
-            ApiFailure::Invalid(reqwest_err) => println!("Error: {}", reqwest_err),
-        },
     }
 }
