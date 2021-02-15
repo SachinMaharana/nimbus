@@ -122,23 +122,7 @@ fn handle_delete(api_client: &HttpApiClient, zone_identifier: String) -> Result<
     Ok(())
 }
 
-fn main() -> Result<()> {
-    let args: Args = Args::from_args();
-
-    let token: Option<String> = Some((&args.cloudflare_token).to_owned());
-
-    let credentials = if let Some(token) = token {
-        Credentials::UserAuthToken { token: token }
-    } else {
-        bail!("API token must be provided")
-    };
-
-    let api_client = HttpApiClient::new(
-        credentials,
-        HttpApiClientConfig::default(),
-        Environment::Production,
-    )?;
-
+fn handle_account_zone(api_client: &HttpApiClient) -> Result<(String, String)> {
     let mut account: Vec<String> = Vec::new();
 
     let response = api_client.request(&account::ListAccounts { params: None });
@@ -152,8 +136,6 @@ fn main() -> Result<()> {
         .default(0)
         .items(&account[..])
         .interact()?;
-
-    println!("Enjoy your {}!", account[selection]);
 
     let response = api_client.request(&zone::ListZones {
         params: ListZonesParams {
@@ -183,20 +165,35 @@ fn main() -> Result<()> {
         .context("Error: zone_with_iden")?;
 
     let selected_zone = &items[selection];
+    Ok((zone_identifier.to_owned(), selected_zone.to_owned()))
+}
+
+fn main() -> Result<()> {
+    let args: Args = Args::from_args();
+
+    let token: Option<String> = Some((&args.cloudflare_token).to_owned());
+
+    let credentials = if let Some(token) = token {
+        Credentials::UserAuthToken { token: token }
+    } else {
+        bail!("API token must be provided")
+    };
+
+    let api_client = HttpApiClient::new(
+        credentials,
+        HttpApiClientConfig::default(),
+        Environment::Production,
+    )?;
+
+    let (zone_identifier, selected_zone) = handle_account_zone(&api_client)?;
 
     match args.cmd {
         Command::List => {
-            let (dns_names, _) = handle_list(&api_client, zone_identifier.to_owned())?;
+            let (dns_names, _) = handle_list(&api_client, zone_identifier)?;
             println!("{:?}", dns_names);
             Ok(())
         }
-        Command::Create => {
-            return handle_create(
-                &api_client,
-                zone_identifier.to_owned(),
-                selected_zone.to_owned(),
-            )
-        }
-        Command::Delete => return handle_delete(&api_client, zone_identifier.to_owned()),
+        Command::Create => return handle_create(&api_client, zone_identifier, selected_zone),
+        Command::Delete => return handle_delete(&api_client, zone_identifier),
     }
 }
