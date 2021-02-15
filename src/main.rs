@@ -1,6 +1,10 @@
+#[macro_use] 
+extern crate prettytable;
+use prettytable::{Table, Row, Cell};
 use anyhow::Result;
 use cloudflare::framework::{auth::Credentials, Environment, HttpApiClient, HttpApiClientConfig};
 use structopt::StructOpt;
+
 
 use crate::args::{Args, Command};
 
@@ -40,7 +44,13 @@ fn main() -> Result<()> {
     match args.cmd {
         Command::List => {
             let DnsInfo { dns_names, .. } = handle_list(&api_client, zone_info)?;
-            println!("{:?}", dns_names);
+            let mut table = Table::new();
+            table.set_titles(row![FYc => "DNS Records"]);
+            for d in dns_names {
+               table.add_row(row![d]);
+            }
+            table.printstd();
+            // println!("{:?}", dns_names);
             Ok(())
         }
         Command::Create => return handle_create(&api_client, zone_info),
