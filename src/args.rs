@@ -7,7 +7,8 @@ pub struct Args {
         long = "cloudflare_token",
         env,
         hide_env_values = true,
-        required = true
+        required = true,
+        help = "or export env variable"
     )]
     pub cloudflare_token: String,
     #[structopt(subcommand)]

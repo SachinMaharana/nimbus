@@ -6,8 +6,8 @@ use cloudflare::{
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
 use dns::DnsContent;
 use rand::seq::SliceRandom;
-use std::net::Ipv4Addr;
 use std::{collections::HashMap, str::FromStr};
+use std::{convert::TryInto, net::Ipv4Addr};
 use zone::{ListZonesParams, Status};
 
 #[derive(Clone)]
@@ -66,18 +66,37 @@ pub fn handle_create(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<
         .context("Error: rand")?
         .to_owned();
 
-    let record: String = Input::with_theme(&ColorfulTheme::default())
+    let input_record: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Record Name")
         .default(random_record.to_string())
         .interact_text()?;
 
-    let record = format!("{}{}{}", record, ".", zone_name);
+    let types = vec!["A", "CNAME"];
 
-    let ip: String = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("IP Addr")
-        .interact_text()?;
+    let record_type = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Record Type")
+        .default(0)
+        .items(&types[..])
+        .interact()?;
 
-    let ipv4 = Ipv4Addr::from_str(ip.as_str())?;
+    let record_type: String = types[record_type].try_into()?;
+
+    let record = format!("{}{}{}", input_record, ".", zone_name);
+
+    let content = if record_type == "A" {
+        let ipv4: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("IP Address")
+            .interact_text()?;
+
+        let ipv4 = Ipv4Addr::from_str(ipv4.as_str())?;
+
+        DnsContent::A { content: { ipv4 } }
+    } else {
+        let cname: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("CNAME")
+            .interact_text()?;
+        DnsContent::CNAME { content: { cname } }
+    };
 
     let _response = api_client
         .request(&dns::CreateDnsRecord {
@@ -87,7 +106,7 @@ pub fn handle_create(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<
                 name: record.as_str(),
                 proxied: Some(true),
                 priority: None,
-                content: DnsContent::A { content: ipv4 },
+                content: content,
             },
         })
         .context("Error creating dns record")?;
