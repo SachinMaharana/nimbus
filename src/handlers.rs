@@ -16,7 +16,7 @@ pub struct ZoneInfo {
     pub zone_name: String,
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub struct DnsInfo {
     pub dns_names: Vec<String>,
     dns_identifier_hashmap: HashMap<String, String>,
