@@ -18,10 +18,10 @@ pub struct ZoneInfo {
 
 #[derive(Debug)]
 pub struct DnsInfo {
-    pub dns_identifier_hashmap: HashMap<String, DnsIn>,
+    pub dns_identifier_hashmap: HashMap<String, DnsDetails>,
 }
 #[derive(Debug)]
-pub struct DnsIn {
+pub struct DnsDetails {
     pub dns_id: String,
     pub dns_content: DnsContent,
 }
@@ -37,12 +37,12 @@ pub fn handle_list(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<Dn
 
     let dns_records = dns_list_response.result;
 
-    let mut dns_identifier_hashmap: HashMap<String, DnsIn> = HashMap::new();
+    let mut dns_identifier_hashmap: HashMap<String, DnsDetails> = HashMap::new();
 
     for record in dns_records.iter() {
         dns_identifier_hashmap.insert(
             record.name.clone(),
-            DnsIn {
+            DnsDetails {
                 dns_id: record.id.clone(),
                 dns_content: record.content.clone(),
             },
