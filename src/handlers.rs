@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
+use cloudflare::endpoints::dns::DnsContent;
 use cloudflare::{
     endpoints::{account, dns, zone},
     framework::{apiclient::ApiClient, HttpApiClient, OrderDirection, SearchMatch},
 };
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
-use dns::DnsContent;
 use rand::seq::SliceRandom;
 use std::{collections::HashMap, str::FromStr};
 use std::{convert::TryInto, net::Ipv4Addr};
@@ -18,8 +18,12 @@ pub struct ZoneInfo {
 
 #[derive(Debug)]
 pub struct DnsInfo {
-    pub dns_names: Vec<String>,
-    dns_identifier_hashmap: HashMap<String, String>,
+    pub dns_identifier_hashmap: HashMap<String, DnsIn>,
+}
+#[derive(Debug)]
+pub struct DnsIn {
+    pub dns_id: String,
+    pub dns_content: DnsContent,
 }
 
 pub fn handle_list(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<DnsInfo> {
@@ -33,19 +37,19 @@ pub fn handle_list(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<Dn
 
     let dns_records = dns_list_response.result;
 
-    let mut dns_identifier_hashmap: HashMap<String, String> = HashMap::new();
+    let mut dns_identifier_hashmap: HashMap<String, DnsIn> = HashMap::new();
 
     for record in dns_records.iter() {
-        dns_identifier_hashmap.insert(record.name.clone(), record.id.clone());
+        dns_identifier_hashmap.insert(
+            record.name.clone(),
+            DnsIn {
+                dns_id: record.id.clone(),
+                dns_content: record.content.clone(),
+            },
+        );
     }
 
-    let dns_names_list = dns_identifier_hashmap
-        .keys()
-        .cloned()
-        .collect::<Vec<String>>();
-
     let dns_info = DnsInfo {
-        dns_names: dns_names_list,
         dns_identifier_hashmap,
     };
 
@@ -117,13 +121,17 @@ pub fn handle_create(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<
 
 pub fn handle_delete(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<()> {
     let DnsInfo {
-        dns_names: dns_names_list,
         dns_identifier_hashmap,
     } = handle_list(&api_client, zone_info.clone())?;
 
+    let dns_names_list = dns_identifier_hashmap
+        .keys()
+        .cloned()
+        .collect::<Vec<String>>();
+
     let defaults = vec![false; dns_names_list.len()];
     let selections = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick records to delete")
+        .with_prompt("Pick records to delete(Press `space` for multiple records)")
         .items(&dns_names_list[..])
         .defaults(&defaults[..])
         .interact()?;
@@ -140,11 +148,15 @@ pub fn handle_delete(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<
                 .with_prompt(format!("Do you want to delete {} record?", dns_name))
                 .interact()?
             {
+                let iden = dns_identifier_hashmap
+                    .get(&dns_names_list[selection])
+                    .context("Error: dns_identifier_hashmap hashmap")?
+                    .dns_id
+                    .clone();
+
                 let _delete_dns_response = api_client.request(&dns::DeleteDnsRecord {
                     zone_identifier: zone_info.zone_identifier.as_str(),
-                    identifier: dns_identifier_hashmap
-                        .get(&dns_names_list[selection])
-                        .context("Error: dns_identifier_hashmap hashmap")?,
+                    identifier: iden.as_str(),
                 });
                 println!("DNS {} successfully deleted", dns_name);
             } else {
