@@ -11,7 +11,7 @@ use prettytable::{
 use structopt::StructOpt;
 
 use crate::handlers::{
-    handle_account_zone, handle_create, handle_delete, handle_list, DnsInfo, ZoneInfo,
+    handle_account_zone, handle_create, handle_delete, handle_list, handle_patch, DnsInfo, ZoneInfo,
 };
 
 mod args;
@@ -47,6 +47,7 @@ fn main() -> Result<()> {
             DnsSubCommand::List => return show_list(&api_client, zone_info),
             DnsSubCommand::Create => return handle_create(&api_client, zone_info),
             DnsSubCommand::Delete => return handle_delete(&api_client, zone_info),
+            DnsSubCommand::Update => return handle_patch(&api_client, zone_info),
         },
     }
 }
@@ -75,6 +76,7 @@ fn show_list(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<()> {
             _ => {}
         }
     }
+    // print table
     table.printstd();
     Ok(())
 }

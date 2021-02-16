@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use cloudflare::endpoints::dns::DnsContent;
 use cloudflare::{
     endpoints::{account, dns, zone},
@@ -220,4 +220,84 @@ pub fn handle_account_zone(api_client: &HttpApiClient) -> Result<ZoneInfo> {
         zone_name: zone_name_selected.to_owned(),
     };
     Ok(zone_info)
+}
+
+pub fn handle_patch(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<()> {
+    let DnsInfo {
+        dns_identifier_hashmap,
+    } = handle_list(&api_client, zone_info.clone())?;
+
+    let dns_names_list = dns_identifier_hashmap
+        .keys()
+        .cloned()
+        .collect::<Vec<String>>();
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Record to update")
+        .default(0)
+        .items(&dns_names_list[..])
+        .interact()?;
+    let selected = (&dns_names_list[selection]).to_owned();
+
+    let iden = dns_identifier_hashmap
+        .get(&dns_names_list[selection])
+        .context("Error: dns_identifier_hashmap hashmap")?
+        .dns_id
+        .clone();
+
+    let dns_response = api_client
+        .request(&dns::ListDnsRecords {
+            zone_identifier: zone_info.zone_identifier.as_str(),
+            params: dns::ListDnsRecordsParams {
+                name: Some(selected),
+                search_match: Some(SearchMatch::All),
+                ..Default::default()
+            },
+        })?
+        .result;
+
+    if dns_response.is_empty() {
+        bail!("No records found");
+    }
+
+    let dns_response = (&dns_response[0]).to_owned();
+
+    println!("Let's Update");
+
+    let change_record_name: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("New Record Name")
+        .with_initial_text(dns_response.name.to_string())
+        .interact_text()?;
+
+    let contents = if let DnsContent::A { content } = dns_response.content {
+        let ipv4: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("New IP Address")
+            .with_initial_text(content.to_string())
+            .interact_text()?;
+        let ipv4 = Ipv4Addr::from_str(ipv4.as_str())?;
+
+        DnsContent::A { content: { ipv4 } }
+    } else if let DnsContent::CNAME { content } = dns_response.content.clone() {
+        let cname: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("New CNAME")
+            .with_initial_text(content)
+            .interact_text()?;
+        DnsContent::CNAME { content: { cname } }
+    } else {
+        unimplemented!("");
+    };
+
+    let _response = api_client
+        .request(&dns::UpdateDnsRecord {
+            identifier: iden.as_str(),
+            zone_identifier: zone_info.zone_identifier.as_str(),
+            params: dns::UpdateDnsRecordParams {
+                ttl: None,
+                name: change_record_name.as_str(),
+                proxied: Some(true),
+                content: contents,
+            },
+        })
+        .context("Error creating dns record")?;
+    Ok(())
 }

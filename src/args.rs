@@ -42,4 +42,7 @@ pub enum DnsSubCommand {
     /// Delete a dns records for a zone
     #[structopt(name = "delete")]
     Delete,
+    /// Delete a dns records for a zone
+    #[structopt(name = "update")]
+    Update,
 }
