@@ -40,6 +40,7 @@ fn main() -> Result<()> {
 
     let token = args.cloudflare_token.clone();
     let api_client = Client::new(token)?.api_client;
+    println!("lsolso");
 
     let zone_info: ZoneInfo = handle_account_zone(&api_client)?;
     match args.cmd {

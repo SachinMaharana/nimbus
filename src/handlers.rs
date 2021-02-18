@@ -110,7 +110,7 @@ pub fn handle_create(api_client: &HttpApiClient, zone_info: ZoneInfo) -> Result<
                 name: record.as_str(),
                 proxied: Some(true),
                 priority: None,
-                content: content,
+                content,
             },
         })
         .context("Error creating dns record")?;

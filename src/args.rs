@@ -1,6 +1,14 @@
+use nimbus::terminal::emoji;
+use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
+#[structopt(
+    version = env!("CARGO_PKG_VERSION"),
+    author = env!("CARGO_PKG_AUTHORS"),
+    name = format!("{}  {} nimbus", emoji::CLOUD, emoji::SPARKLE),
+    about = "nimbus cli interacts with cloudflare for managing dns records"
+)]
 pub struct Args {
     #[structopt(
         short = "c",
@@ -16,12 +24,8 @@ pub struct Args {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(
-    name = "nimbus",
-    about = "nimbus cli interacts with cloudflare for managing dns records"
-)]
 pub enum Command {
-    #[structopt(name = "dns")]
+    #[structopt(name = "dns",global_settings = &[AppSettings::DisableVersion,AppSettings::DeriveDisplayOrder,AppSettings::ArgRequiredElseHelp])]
     Dns(Dns),
 }
 
